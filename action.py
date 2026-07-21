@@ -209,24 +209,35 @@ def fmt_rev(repo, rev):
         return 'N/A'
 
     try:
+        branches = list(repo.get_branches())
+        tags = list(repo.get_tags())
+        all_refs = branches + tags
+
         if is_sha(rev):
-            all_refs = [b for b in repo.get_branches()] + [t for t in repo.get_tags()]
-            refs = [f'`{r.name}`' for r in all_refs if rev == r.commit.sha]
-            s = repo.get_commit(rev).html_url
+            sha = rev
+        else:
+            matches = [r for r in all_refs if r.name == rev]
+            if not matches:
+                return rev
+            sha = matches[0].commit.sha
+
+        # Look for other branches/tags pointing at the same commit
+        refs = [f'`{r.name}`' for r in all_refs if sha == r.commit.sha and r.name != rev]
+        note = f' ({",".join(refs)})' if len(refs) else ''
+
+        if is_sha(rev):
             # commits get formatted nicely by GitHub itself
-            return s + f' ({",".join(refs)})' if len(refs) else s
-        elif rev in [t.name for t in repo.get_tags()]:
+            return repo.get_commit(rev).html_url + note
+        elif rev in [t.name for t in tags]:
             # For some reason there's no way of getting the URL via API
             s = f'{repo.html_url}/releases/tag/{rev}'
-        elif rev in [b.name for b in repo.get_branches()]:
+        else:
             # For some reason there's no way of getting the URL via API
             s = f'{repo.html_url}/tree/{rev}'
-        else:
-            return rev
     except GithubException:
         return rev
 
-    return f'[{repo.full_name}@{rev}]({s})'
+    return f'[{repo.full_name}@{rev}]({s})' + note
 
 
 def shorten_rev(rev):
